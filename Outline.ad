@@ -1,0 +1,266 @@
+= Workshop Outline
+
+. Cloud Native/12(ish) Factors
+.. http://12factor.net/
+[quote]
+____
+In the modern era, software is commonly delivered as a service: called web apps, or software-as-a-service. The twelve-factor app is a methodology for building software-as-a-service apps that:
+
+* Use declarative formats for setup automation, to minimize time and cost for new developers joining the project;
+* Have a clean contract with the underlying operating system, offering maximum portability between execution environments;
+* Are suitable for deployment on modern cloud platforms, obviating the need for servers and systems administration;
+* Minimize divergence between development and production, enabling continuous deployment for maximum agility;
+* And can scale up without significant changes to tooling, architecture, or development practices.
+
+The twelve-factor methodology can be applied to apps written in any programming language, and which use any combination of backing services (database, queue, memory cache, etc).
+____
+.. The Twelve Factors
+...  1. Codebase
+.... One codebase tracked in revision control, many deploys
+.... 1:1 correlation between codebase & app
+.... Multiple codebases isn't an app; it's a distributed system
+.... Each component in a distributed system is an app, & each can 12-factor
+.... Multiple apps sharing same code violates 12 factor
+.... Factor shared code into libs to include with a dependency manager
+.... Many deploys (running instances): prod, staging, dev, test, etc.
+.... SAME CODEBASE (even if different levels of commits at any point in time)
+...  2. Dependencies
+.... Explicitly declare and isolate dependencies
+.... "A twelve-factor app never relies on implicit existence of system-wide packages."
+.... Applies in prod, dev, everywhere
+.... Don't rely on implicit existence of any system tools...or anything, for that matter.
+...  3. Config
+.... Store config in the environment
+.... Everything that is likely to vary between deploys (dev, test, staging, prod):
+..... Resource handles for backing services (db, cache, etc.)
+..... Credentials to external services
+..... Deployment-specific values (e.g. hostname)
+.... Don't store config in code (violation of 12 factor's strict separation of config & code); config varies across deploys, code doesn't
+.... Litmus test: can code be open-sourced without compromising any credentials?
+.... Doesn't include internal (structural) config, which doesn't vary between deploys
+.... Config files better than config mixed with code, but could still accidentally expose credentials, lose track of some config, etc.
+.... Store config in environment variables (env vars)
+.... True 12 factor doesn't include grouping/environments, but manageability sometimes dictates it
+.... Extensions of this concept (like Config service) enable centralized management, dynamic refresh, etc. while still conforming to 12 factor spirit
+...  4. Backing services
+.... Treat backing services as attached resources
+.... Examples: data stores, messaging/queueing systems, SMTP services, caching systems, & external consumer services (Twitter, Google Maps, Bing, etc.)
+.... 12 FAs make no distinction between local & external services...both are _attached resources_ accessed via locator/credentials stored in the config (usually URL)
+.... Local or 3rd party
+.... Swap one for another with *no code changes* in any environment - including production
+...  5. Build, release, run
+.... Strictly separate build(, release,) and run stages
+.... A codebase is transformed into a (non-development) deploy through three stages:
+..... Build: fetches dependencies, compiles binaries and assets
+..... Release: combines build with the deploy's current config, ready for immediate execution in execution environment
+..... Run: launches some set of the application's processes against a selected release
+.... Every release should always have a unique release ID (e.g. timestamp or incrementing number)
+.... Releases are an append-only ledger and a release cannot be mutated once it is created; any change must create a new release
+.... Builds are initiated by developers whenever new code is deployed
+.... Runtime execution, by contrast, can happen automatically in cases such as a server reboot, or a crashed process being restarted by the process manager; Therefore, the run stage should be kept to as few moving parts as possible
+.... The build stage can be more complex, since errors are always in the foreground for a developer who is driving the deploy
+...  6. Processes
+.... Execute the app as one or more stateless processes
+.... Twelve-factor processes are stateless and share-nothing
+.... Any data that needs to persist must be stored in a stateful backing service, typically a database
+.... Never assume that anything cached in memory or on disk will be available on a future request or job – with many processes of each type running, chances are high that a future request will be served by a different process
+.... Sticky sessions are a violation of twelve-factor and should never be used or relied upon; session state data is a good candidate for a datastore that offers time-expiration, such as Memcached or Redis
+...  7. Port binding
+.... Export services via port binding
+.... The twelve-factor app is completely self-contained and does not rely on runtime injection of a webserver into the execution environment to create a web-facing service; the web app exports HTTP as a service by binding to a port, and listening to requests coming in on that port
+.... This is typically implemented by using dependency declaration to add a webserver library to the app, entirely in user space i.e. within the app’s code; the contract with the execution environment is binding to a port to serve requests
+.... Port-binding means that one app can become the backing service for another app by providing the URL to the backing app as a resource handle in the config for the consuming app
+...  8. Concurrency
+.... Scale out via the process model
+.... The share-nothing, horizontally partitionable nature of twelve-factor app processes means that adding more concurrency is a simple and reliable operation
+.... Twelve-factor app processes should never daemonize or write PID files; rely on the operating system's process manager to manage output streams, respond to crashed processes, and handle user-initiated restarts and shutdowns
+...  9. Disposability
+.... Maximize robustness with fast startup and graceful shutdown
+.... The twelve-factor app’s processes are disposable, meaning they can be started or stopped at a moment’s notice, facilitating fast elastic scaling, rapid deployment of code or config changes, and robustness of production deploys
+.... Short startup time provides more agility for the release process and scaling up; and it aids robustness, because the process manager can more easily move processes to new physical machines when warranted
+.... For a web process, graceful shutdown is achieved by ceasing to listen on the service port (thereby refusing any new requests), allowing any current requests to finish, and then exiting.
+.... Implicit in this model is that HTTP requests are short (no more than a few seconds), or in the case of long polling, the client should seamlessly attempt to reconnect when the connection is lost
+.... Idempotent operations, queues (at least once delivery, jobs can be returned to queues in the event of timeout/disconnect, etc. - MH, clarify)
+... 10. Dev/prod parity
+.... Keep development, staging, and production as similar as possible
+.... Historical gaps between development and production
+..... Time gap: may take months for code to go into production
+..... Personnel gap: Code not deployed by developers who wrote it
+..... Tools gap: Developers may use a stack consisting of Nginx, SQLite, & OS X while production is Apache, MySQL, and Linux
+.... The twelve-factor app is designed for continuous deployment by keeping the gap between development and production small
+..... Make the time gap small: a developer may write code and have it deployed hours or even just minutes later
+..... Make the personnel gap small: developers who wrote code are closely involved in deploying it and watching its behavior in production
+..... Make the tools gap small: keep development and production as similar as possible
+.... Resist the urge to use different backing services between development and production; errors create friction that disincentivizes continuous deployment
+.... Lightweight local services are less compelling than they once were; modern backing services are not difficult to install and run thanks to modern packaging systems, such as Homebrew and apt-get, and alternatively, declarative provisioning tools such as Chef and Puppet combined with light-weight virtual environments such as Vagrant allow developers to run local environments which closely approximate production environments
+... 11. Logs
+.... Treat logs as event streams
+.... A twelve-factor app never concerns itself with routing or storage of its output stream
+.... It should not attempt to write to or manage logfiles; instead, each running process writes its event stream, unbuffered, to stdout
+..... During local development, the developer will view this stream in the foreground of their terminal to observe the app’s behavior.
+..... In staging or production deploys, each process’ stream will be captured by the execution environment, collated together with all other streams from the app, and routed to one or more final destinations for viewing and long-term archival (note that these archival destinations are not visible to or configurable by the app, and instead are completely managed by the execution environment)
+.... This affords full flexibility for log capture, management, analysis, etc. independent of code or individual deployments
+... 12. Admin processes
+.... Run admin/management tasks as one-off processes
+.... One-off admin processes should be run in an identical environment as the regular long-running processes of the app, against a release, using the same codebase and config as any process run against that release
+.... Admin code must ship with application code to avoid synchronization issues
+. Spring Boot
+[quote, http://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#getting-started]
+____
+Spring Boot makes it easy to create stand-alone, production-grade Spring based Applications that you can “just run”. We take an opinionated view of the Spring platform and third-party libraries so you can get started with minimum fuss. Most Spring Boot applications need very little Spring configuration.
+
+You can use Spring Boot to create Java applications that can be started using java -jar or more traditional war deployments. We also provide a command line tool that runs “spring scripts”.
+
+Our primary goals are:
+
+Provide a radically faster and widely accessible getting started experience for all Spring development.
+Be opinionated out of the box, but get out of the way quickly as requirements start to diverge from the defaults.
+Provide a range of non-functional features that are common to large classes of projects (e.g. embedded servers, security, metrics, health checks, externalized configuration).
+Absolutely no code generation and no requirement for XML configuration.
+____
+. Spring Cloud + Netflix OSS
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_spring_cloud_netflix]
+____
+Spring Cloud Netflix
+
+This project provides Netflix OSS integrations for Spring Boot apps through autoconfiguration and binding to the Spring Environment and other Spring programming model idioms. With a few simple annotations you can quickly enable and configure the common patterns inside your application and build large distributed systems with battle-tested Netflix components. The patterns provided include Service Discovery (Eureka), Circuit Breaker (Hystrix), Intelligent Routing (Zuul) and Client Side Load Balancing (Ribbon).
+____
+.. Centralizing & externalizing application configuration (Config Server - not Netflix)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_spring_cloud_config]
+____
+Spring Cloud Config provides server and client-side support for externalized configuration in a distributed system. With the Config Server you have a central place to manage external properties for applications across all environments. The concepts on both client and server map identically to the Spring Environment and PropertySource abstractions, so they fit very well with Spring applications, but can be used with any application running in any language. As an application moves through the deployment pipeline from dev to test and into production you can manage the configuration between those environments and be certain that applications have everything they need to run when they migrate. The default implementation of the server storage backend uses git so it easily supports labelled versions of configuration environments, as well as being accessible to a wide range of tooling for managing the content. It is easy to add alternative implementations and plug them in with Spring configuration.
+____
+.. Service registry and discovery (Eureka)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_service_discovery_eureka_clients]
+____
+Service Discovery: Eureka Clients
+Service Discovery is one of the key tenets of a microservice based architecture. Trying to hand configure each client or some form of convention can be very difficult to do and can be very brittle. Eureka is the Netflix Service Discovery Server and Client. The server can be configured and deployed to be highly available, with each server replicating state about the registered services to the others.
+
+Registering with Eureka
+When a client registers with Eureka, it provides meta-data about itself such as host and port, health indicator URL, home page etc. Eureka receives heartbeat messages from each instance belonging to a service. If the heartbeat fails over a configurable timetable, the instance is normally removed from the registry.
+____
+____
+@EnableEurekaClient (MH: or @EnableDiscoveryClient if Eureka is only registry available) makes the app into both a Eureka "instance" (i.e. it registers itself) and a "client" (i.e. it can query the registry to locate other services).
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#spring-cloud-eureka-server]
+____
+High Availability, Zones and Regions
+The Eureka server does not have a backend store, but the service instances in the registry all have to send heartbeats to keep their registrations up to date (so this can be done in memory). Clients also have an in-memory cache of eureka registrations (so they don’t have to go to the registry for every single request to a service).
+
+By default every Eureka server is also a Eureka client and requires (at least one) service URL to locate a peer. If you don’t provide it the service will run and work, but it will shower your logs with a lot of noise about not being able to register with the peer.
+
+See also below for details of Ribbon support on the client side for Zones and Regions.
+
+Standalone Mode
+The combination of the two caches (client and server) and the heartbeats make a standalone Eureka server fairly resilient to failure, as long as there is some sort of monitor or elastic runtime keeping it alive (e.g. Cloud Foundry). In standalone mode, you might prefer to switch off the client side behaviour, so it doesn’t keep trying and failing to reach its peers.
+____
+.. Circuit breakers: implementation and monitoring (Hystrix)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_circuit_breaker_hystrix_clients]
+____
+Netflix has created a library called Hystrix that implements the circuit breaker pattern. In a microservice architecture it is common to have multiple layers of service calls.
+
+A service failure in the lower level of services can cause cascading failure all the way up to the user. When calls to a particular service reach a certain threshold (20 failures in 5 seconds is the default in Hystrix), the circuit opens and the call is not made. In cases of error and an open circuit a fallback can be provided by the developer.
+
+Having an open circuit stops cascading failures and allows overwhelmed or failing services time to heal. The fallback can be another Hystrix protected call, static data or a sane empty value. Fallbacks may be chained so the first fallback makes some other business call which in turn falls back to static data.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_circuit_breaker_hystrix_dashboard]
+____
+Circuit Breaker: Hystrix Dashboard
+One of the main benefits of Hystrix is the set of metrics it gathers about each HystrixCommand. The Hystrix Dashboard displays the health of each circuit breaker in an efficient manner.
+
+To run the Hystrix Dashboard annotate your Spring Boot main class with @EnableHystrixDashboard. You then visit /hystrix and point the dashboard to an individual instances /hystrix.stream endpoint in a Hystrix client application.
+____
+[quote re: Turbine, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_turbine]
+____
+Looking at an individual instances Hystrix data is not very useful in terms of the overall health of the system. Turbine is an application that aggregates all of the relevant /hystrix.stream endpoints into a combined /turbine.stream for use in the Hystrix Dashboard. Individual instances are located via Eureka.
+____
+[quote re: Turbine AQMP, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_turbine_amqp]
+____
+In some environments (e.g. in a PaaS setting), the classic Turbine model of pulling metrics from all the distributed Hystrix commands doesn’t work. In that case you might want to have your Hystrix commands push metrics to Turbine, and Spring Cloud enables that with AMQP messaging. All you need to do on the client is add a dependency to spring-cloud-netflix-hystrix-amqp and make sure there is a Rabbit broker available (see Spring Boot documentation for details on how to configure the client credentials, but it should work out of the box for a local broker or in Cloud Foundry).
+____
+.. Creating edge services (Discovery Client + Zuul + Ribbon)
+.. Load balancers (Ribbon)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#spring-cloud-ribbon]
+____
+Ribbon is a client side load balancer which gives you a lot of control over the behaviour of HTTP and TCP clients. Feign already uses Ribbon, so if you are using @FeignClient then this section also applies.
+(NOTE: MAH, not sure how useful this is in the context of this workshop; revisit)
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_using_ribbon_with_eureka]
+____
+When Eureka is used in conjunction with Ribbon the ribbonServerList is overridden with an extension of DiscoveryEnabledNIWSServerList which populates the list of servers from Eureka. It also replaces the IPing interface with NIWSDiscoveryPing which delegates to Eureka to determine if a server is up. The ServerList that is installed by default is a DomainExtractingServerList and the purpose of this is to make physical metadata available to the load balancer without using AWS AMI metadata (which is what Netflix relies on). By default the server list will be constructed with "zone" information as provided in the instance metadata (so on the client set eureka.instance.metadataMap.zone), and if that is missing it can use the domain name from the server hostname as a proxy for zone (if the flag approximateZoneFromHostname is set). Once the zone information is available it can be used in a ServerListFilter (by default it will be used to locate a server in the same zone as the client because the default is a ZonePreferenceServerListFilter).
+____
+.. Intelligent routing (Zuul)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_router_and_filter_zuul]
+____
+Routing in an integral part of a microservice architecture. Zuul is a JVM based router and server side load balancer by Netflix.
+
+Netflix uses Zuul for the following:
+
+* Authentication
+* Insights
+* Stress Testing
+* Canary Testing
+* Dynamic Routing
+* Service Migration
+* Load Shedding
+* Security
+* Static Response handling
+* Active/Active traffic management
+
+Zuul’s rule engine allows rules and filters to be written in essentially any JVM language, with built in support for Java and Groovy.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#netflix-zuul-reverse-proxy]
+____
+Spring Cloud has created an embedded Zuul proxy to ease the development of a very common use case where a UI application wants to proxy calls to one or more back end services. This feature is useful for a user interface to proxy to the backend services it requires, avoiding the need to manage CORS and authentication concerns independently for all the backends.
+
+To enable it, annotate a Spring Boot main class with @EnableZuulProxy, and this forwards local calls to the appropriate service. By convention, a service with the Eureka ID "users", will receive requests from the proxy located at /users (with the prefix stripped). The proxy uses Ribbon to locate an instance to forward to via Eureka, and all requests are executed in a Hystrix command, so failures will show up in Hystrix metrics, and once the circuit is open the proxy will not try to contact the service.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_strangulation_patterns_and_local_forwards]
+____
+A common pattern when migrating an existing application or API is to "strangle" old endpoints, slowly replacing them with different implementations. The Zuul proxy is a useful tool for this because you can use it to handle all traffic from clients of the old endpoints, but redirect some of the requests to new ones.
+____
+.. Security (HTTP Basic, OAuth)
+.. Distributed Tracing (Zipkin)
+.. Async Messaging (MH added ex post facto - Spring Cloud Stream w/Redis &/or RabbitMQ)
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_spring_cloud_stream]
+____
+Spring Cloud Stream is a framework for building message-driven microservice applications. Spring Cloud Stream builds upon Spring Boot to create standalone, production-grade Spring applications, and uses Spring Integration to provide connectivity to message brokers. It provides opinionated configuration of middleware from several vendors, introducing the concepts of persistent publish-subscribe semantics, consumer groups, and partitions.
+
+You can add the @EnableBinding annotation to your application to get immediate connectivity to a message broker, and you can add @StreamListener to a method to cause it to receive events for stream processing.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_the_binder_abstraction]
+____
+Spring Cloud Stream provides Binder implementations for Kafka, Rabbit MQ, Redis, and Gemfire. Spring Cloud Stream also includes a TestSupportBinder, which leaves a channel unmodified so that tests can interact with channels directly and reliably assert on what is received. You can use the extensible API to write your own Binder.
+
+Spring Cloud Stream uses Spring Boot for configuration, and the Binder abstraction makes it possible for a Spring Cloud Stream application to be flexible in how it connects to middleware. For example, deployers can dynamically choose, at runtime, the destinations (e.g., the Kafka topics or RabbitMQ exchanges) to which channels connect. Such configuration can be provided through external configuration properties and in any form supported by Spring Boot (including application arguments, environment variables, and application.yml or application.properties files). In the sink example from the Introducing Spring Cloud Stream section, setting the application property spring.cloud.stream.bindings.input.destination to raw-sensor-data will cause it to read from the raw-sensor-data Kafka topic, or from a queue bound to the raw-sensor-data RabbitMQ exchange.
+
+Spring Cloud Stream automatically detects and uses a binder found on the classpath. You can easily use different types of middleware with the same code: just include a different binder at build time. For more complex use cases, you can also package multiple binders with your application and have it choose the binder, and even whether to use different binders for different channels, at runtime.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#consumer-groups]
+____
+While the publish-subscribe model makes it easy to connect applications through shared topics, the ability to scale up by creating multiple instances of a given application is equally important. When doing this, different instances of an application are placed in a competing consumer relationship, where only one of the instances is expected to handle a given message.
+
+Spring Cloud Stream models this behavior through the concept of a consumer group. (Spring Cloud Stream consumer groups are similar to and inspired by Kafka consumer groups.)
+
+All groups which subscribe to a given destination receive a copy of published data, but only one member of each group receives a given message from that destination.
+
+Consistent with the opinionated application model of Spring Cloud Stream, consumer group subscriptions are durable. That is, a binder implementation ensures that group subscriptions are persistent, and once at least one subscription for a group has been created, the group will receive messages, even if they are sent while all applications in the group are stopped.
+____
+[quote, http://cloud.spring.io/spring-cloud-static/spring-cloud.html#_declaring_and_binding_channels]
+____
+Using @StreamListener for Automatic Content Type Handling (MAH: This is IMPORTANT!!!)
+
+Complementary to its Spring Integration support, Spring Cloud Stream provides its own @StreamListener annotation, modeled after other Spring Messaging annotations (e.g. @MessageMapping, @JmsListener, @RabbitListener, etc.). The @StreamListener annotation provides a simpler model for handling inbound messages, especially when dealing with use cases that involve content type management and type coercion.
+
+Spring Cloud Stream provides an extensible MessageConverter mechanism for handling data conversion by bound channels and for, in this case, dispatching to methods annotated with @StreamListener.
+
+The distinction between @StreamListener and a Spring Integration @ServiceActivator is seen when considering an inbound Message that has a String payload and a contentType header of application/json. In the case of @StreamListener, the MessageConverter mechanism will use the contentType header to parse the String payload into a Vote object.
+
+As with other Spring Messaging methods, method arguments can be annotated with @Payload, @Headers and @Header.
+
+NOTE: For methods which return data, you must use the @SendTo annotation to specify the output binding destination for data returned by the method. (MAH: This was in the text.)
+
+NOTE: Important!  MAH
+____
+
+. Deployment to Pivotal Cloud Foundry
