@@ -32,7 +32,7 @@ Each exercise performed will be shown in context so attendees learn and internal
 
 ## Outline
 
-In this 3 hour lab, we will start by explaining the following key concepts:
+In this workshop, we will start by explaining the following key concepts:
 
 * The Evolution of Cloud Native Development
 * 12 (or so) Factor Apps: A Starting Point
