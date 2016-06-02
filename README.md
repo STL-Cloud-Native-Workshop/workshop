@@ -23,7 +23,7 @@ Once you understand the foundational concepts, it's time to put that knowledge t
 
 Each exercise performed will be shown in context so attendees learn and internalize the why _and_ how of Cloud Native development practices.
 
-## Additional Notes/Excess Material (not included in proposal)
+## Additional Notes/Excess Material
 
 * (_MENTION, BUT SKIP FOR INTRO WORKSHOP_) Create build/release/run pipeline
 * (_MENTION, BUT SKIP FOR INTRO WORKSHOP_) Create horizontally scalable configuration (NOTE: This would require service directory, circuit breaker, load balancer...)
